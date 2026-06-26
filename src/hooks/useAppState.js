@@ -38,6 +38,8 @@ export const useAppState = () => {
   const [toasts, setToasts] = useState([]);
   const [hasSavedState, setHasSavedState] = useState(false);
   const [projectId, setProjectId] = useState("local-project");
+  const [questions, setQuestions] = useState([]);
+  const [questionsLoading, setQuestionsLoading] = useState(false);
 
   // Check for saved state on mount
   useEffect(() => {
@@ -62,7 +64,7 @@ export const useAppState = () => {
     localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(state));
   };
 
-  const loadSavedState = () => {
+  const loadSavedState = async () => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEY);
       if (saved) {
@@ -74,8 +76,23 @@ export const useAppState = () => {
         setStack(parsed.stack);
         setSrs(parsed.srs);
         setBadges(parsed.badges || []);
-        setProjectId(parsed.projectId || "local-project");
+        const activeId = parsed.projectId || "local-project";
+        setProjectId(activeId);
         addToast("Mission resumed! Welcome back, Architect.", "success");
+
+        if (activeId !== "local-project") {
+          setQuestionsLoading(true);
+          try {
+            const qRes = await api.fetchQuestions(activeId);
+            if (qRes.success && qRes.questions) {
+              setQuestions(qRes.questions);
+            }
+          } catch (qErr) {
+            console.warn("Could not fetch questions on resume from server", qErr);
+          } finally {
+            setQuestionsLoading(false);
+          }
+        }
       }
     } catch (e) {
       console.error("Error loading state", e);
@@ -129,15 +146,26 @@ export const useAppState = () => {
     unlockBadge("Project Architect — Level 1");
     
     let activeId = "local-project";
+    setQuestionsLoading(true);
     try {
       const res = await api.initProject(name, description);
       if (res.success && res.projectId) {
         activeId = res.projectId;
         setProjectId(res.projectId);
         addToast("Scoping project initialized on server!", "success");
+        try {
+          const qRes = await api.fetchQuestions(res.projectId);
+          if (qRes.success && qRes.questions) {
+            setQuestions(qRes.questions);
+          }
+        } catch (qErr) {
+          console.warn("Could not fetch questions from server", qErr);
+        }
       }
     } catch (err) {
       console.warn("Backend initialization offline, using client fallback", err);
+    } finally {
+      setQuestionsLoading(false);
     }
 
     saveState(2, xp + 50, proj, answers, stack, srs, ["Project Architect — Level 1"], activeId);
@@ -155,10 +183,10 @@ export const useAppState = () => {
     }
 
     // Check progress for badges
-    const totalQuestions = 8;
+    const totalQuestions = questions.length;
     const answeredCount = Object.keys(updatedAnswers).length;
     
-    if (answeredCount === 4) {
+    if (answeredCount === Math.floor(totalQuestions / 2)) {
       unlockBadge("Halfway There!");
     }
     
@@ -427,6 +455,9 @@ export const useAppState = () => {
     navigateToPhase,
     resetAll,
     handleFastForwardQuestions,
-    handleFastForwardSRS
+    handleFastForwardSRS,
+    questions,
+    setQuestions,
+    questionsLoading
   };
 };

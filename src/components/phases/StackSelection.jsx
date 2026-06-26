@@ -1,22 +1,63 @@
 import React, { useState, useEffect } from "react";
 import { Sparkles, Check, AlertTriangle, Cpu, Calendar, Shield } from "lucide-react";
 import { stackArsenal } from "../../utils/srsTemplates";
+import * as api from "../../utils/api";
 
-export const StackSelection = ({ answers, stack, onConfirmStack }) => {
+export const StackSelection = ({ answers, stack, onConfirmStack, projectId }) => {
   const [selected, setSelected] = useState({ ...stack });
   const [warnings, setWarnings] = useState([]);
   const [complexity, setComplexity] = useState({ level: "Medium", barWidth: "50%", color: "text-aurora", weeks: "6-8 weeks" });
+  
+  const [recommendedStack, setRecommendedStack] = useState({
+    frontend: "Next.js",
+    backend: "Node.js (Express)",
+    database: "PostgreSQL",
+    hosting: "Vercel",
+    auth: "Supabase Auth"
+  });
+  const [sdlc, setSdlc] = useState("Agile Scrum");
+  const [rationale, setRationale] = useState("AI recommended a modern stack tailored to your launch variables. Confirm or override individual elements below.");
+  const [loading, setLoading] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [arsenal, setArsenal] = useState(stackArsenal);
 
-  // Load preset recommendation based on answers
-  const isMvp = answers.projectType === "Startup MVP" || answers.timeline === "1–3 months";
-  const isSolo = answers.teamCapacity === "Solo Developer";
-  const recommendedStack = {
-    frontend: isMvp ? "Next.js" : "React",
-    backend: isMvp ? "Node.js (Express)" : "Django (Python)",
-    database: isMvp ? "Supabase DB" : "PostgreSQL",
-    hosting: isMvp ? "Vercel" : "AWS EC2/ECS",
-    auth: isMvp ? "Supabase Auth" : "Auth0"
-  };
+  const [backendComplexity, setBackendComplexity] = useState(null);
+  const [backendWarnings, setBackendWarnings] = useState(null);
+
+  const loadingMessages = [
+    "Analyzing stack selection parameters...",
+    "Compiling functional requirement models...",
+    "Structuring database transaction schemas...",
+    "Validating authentication & security boundaries...",
+    "Mapping DFD context coordinates...",
+    "Compiling final IEEE-830 SRS blueprint..."
+  ];
+
+  const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
+  const [progress, setProgress] = useState(10);
+
+  useEffect(() => {
+    if (!isSubmitting) {
+      setProgress(10);
+      return;
+    }
+    const interval = setInterval(() => {
+      setProgress(p => Math.min(95, p + Math.floor(Math.random() * 15) + 5));
+    }, 450);
+    return () => clearInterval(interval);
+  }, [isSubmitting]);
+
+  useEffect(() => {
+    if (!isSubmitting) return;
+
+    let idx = 0;
+    const interval = setInterval(() => {
+      idx = (idx + 1) % loadingMessages.length;
+      setLoadingMessage(loadingMessages[idx]);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [isSubmitting]);
 
   const handleSelect = (category, value) => {
     setSelected((prev) => ({ ...prev, [category]: value }));
@@ -26,29 +67,180 @@ export const StackSelection = ({ answers, stack, onConfirmStack }) => {
     setSelected(recommendedStack);
   };
 
+  const handleConfirm = async () => {
+    if (isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      await onConfirmStack(selected);
+    } catch (err) {
+      console.warn("Could not confirm stack", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // Load preset recommendation based on answers from backend
+  useEffect(() => {
+    const isMvp = answers.projectType === "Startup MVP" || answers.timeline === "1–3 months";
+    const localRecommend = {
+      frontend: isMvp ? "Next.js" : "React",
+      backend: isMvp ? "Node.js (Express)" : "Django (Python)",
+      database: isMvp ? "Supabase DB" : "PostgreSQL",
+      hosting: isMvp ? "Vercel" : "AWS EC2/ECS",
+      auth: isMvp ? "Supabase Auth" : "Auth0"
+    };
+
+    if (!projectId || projectId === "local-project") {
+      setRecommendedStack(localRecommend);
+      setSelected(localRecommend);
+      
+      // Prepend local presets to the top of category lists
+      setArsenal(prev => {
+        const updated = { ...prev };
+        Object.keys(localRecommend).forEach(cat => {
+          if (updated[cat]) {
+            const existingIdx = updated[cat].findIndex(opt => opt.value === localRecommend[cat]);
+            if (existingIdx !== -1) {
+              const match = updated[cat][existingIdx];
+              const remaining = updated[cat].filter((_, idx) => idx !== existingIdx);
+              updated[cat] = [
+                { ...match, sub: match.sub || "Recommended by AI" },
+                ...remaining
+              ];
+            } else {
+              updated[cat] = [
+                { value: localRecommend[cat], sub: "Recommended by AI" },
+                ...updated[cat]
+              ];
+            }
+          }
+        });
+        return updated;
+      });
+      return;
+    }
+
+    const fetchStackRecommendation = async () => {
+      setLoading(true);
+      try {
+        const res = await api.recommendStack(projectId, answers);
+        const recStack = res.recommendedStack || res.stack;
+        if (res.success && recStack) {
+          setRecommendedStack(recStack);
+          setSelected(recStack);
+          
+          if (res.sdlcRecommendation) {
+            setSdlc(res.sdlcRecommendation);
+          } else if (res.compatibilityCheck && res.compatibilityCheck.status) {
+            setSdlc(res.compatibilityCheck.status.toUpperCase());
+          }
+          
+          if (res.rationale) {
+            setRationale(res.rationale);
+          } else if (res.compatibilityCheck && res.compatibilityCheck.warnings) {
+            setRationale("AI tech advice generated from project constraints. Select or customize your stack elements below.");
+          }
+
+          if (res.complexityIndex) {
+            let barWidth = "50%";
+            let color = "text-aurora";
+            let weeks = "6-8 weeks";
+            const level = res.complexityIndex;
+            if (level === "Low") {
+              barWidth = "25%";
+              color = "text-pulse";
+              weeks = "3-5 weeks";
+            } else if (level === "Moderate" || level === "Medium") {
+              barWidth = "50%";
+              color = "text-aurora";
+              weeks = "6-8 weeks";
+            } else if (level === "High") {
+              barWidth = "85%";
+              color = "text-red-400";
+              weeks = "10-14 weeks";
+            }
+            setBackendComplexity({ level, barWidth, color, weeks });
+          }
+
+          if (res.compatibilityCheck && res.compatibilityCheck.warnings) {
+            setBackendWarnings(res.compatibilityCheck.warnings);
+          }
+
+          // Dynamically position recommended values at the top of stack categories
+          setArsenal(prev => {
+            const updated = { ...prev };
+            Object.keys(recStack).forEach(cat => {
+              if (updated[cat]) {
+                const existingIdx = updated[cat].findIndex(opt => opt.value === recStack[cat]);
+                if (existingIdx !== -1) {
+                  const match = updated[cat][existingIdx];
+                  const remaining = updated[cat].filter((_, idx) => idx !== existingIdx);
+                  updated[cat] = [
+                    { ...match, sub: match.sub || "Recommended by AI" },
+                    ...remaining
+                  ];
+                } else {
+                  updated[cat] = [
+                    { value: recStack[cat], sub: "Recommended by AI" },
+                    ...updated[cat]
+                  ];
+                }
+              }
+            });
+            return updated;
+          });
+        } else {
+          setRecommendedStack(localRecommend);
+          setSelected(localRecommend);
+        }
+      } catch (err) {
+        console.warn("API recommendStack offline, using local simulation presets", err);
+        setRecommendedStack(localRecommend);
+        setSelected(localRecommend);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStackRecommendation();
+  }, [projectId, answers]);
+
   // Recalculate complexity and check compatibility warnings
   useEffect(() => {
+    const isMatchingRecommended = recommendedStack &&
+      selected.frontend === recommendedStack.frontend &&
+      selected.backend === recommendedStack.backend &&
+      selected.database === recommendedStack.database &&
+      selected.hosting === recommendedStack.hosting &&
+      selected.auth === recommendedStack.auth;
+
+    if (isMatchingRecommended && backendComplexity && backendWarnings) {
+      setComplexity(backendComplexity);
+      setWarnings(backendWarnings);
+      return;
+    }
+
     const newWarnings = [];
     let complexityPoints = 0;
 
     // Evaluate Frontend
     if (selected.frontend === "Angular") complexityPoints += 3;
     else if (selected.frontend === "Next.js" || selected.frontend === "React") complexityPoints += 1.5;
-    else complexityPoints += 1; // Svelte/Vue
+    else complexityPoints += 1; // Svelte/Vue/React Native, etc.
 
     // Evaluate Backend
     if (selected.backend === "Spring Boot (Java)") complexityPoints += 4;
     else if (selected.backend === "Django (Python)" || selected.backend === "Laravel (PHP)") complexityPoints += 2.5;
-    else complexityPoints += 1.5; // Node/Rails
+    else complexityPoints += 1.5; // Node/Rails/NestJS
 
     // Evaluate Database
     if (selected.database === "MongoDB" || selected.database === "PostgreSQL") complexityPoints += 2;
-    else complexityPoints += 1; // Supabase DB
+    else complexityPoints += 1; // Supabase DB / Postgres (Supabase)
 
     // Evaluate Hosting
     if (selected.hosting === "AWS EC2/ECS") complexityPoints += 4;
     else if (selected.hosting === "Google Cloud") complexityPoints += 3;
-    else complexityPoints += 1; // Vercel/Railway
+    else complexityPoints += 1; // Vercel/Railway/Render
 
     // Evaluate Auth
     if (selected.auth === "Auth0" || selected.auth === "Custom Auth (JWT)") complexityPoints += 3;
@@ -97,7 +289,7 @@ export const StackSelection = ({ answers, stack, onConfirmStack }) => {
     }
 
     setWarnings(newWarnings);
-  }, [selected, answers]);
+  }, [selected, answers, recommendedStack, backendComplexity, backendWarnings]);
 
   return (
     <div className="w-full max-w-4xl mx-auto py-6 px-4 animate-fade-in space-y-6">
@@ -107,7 +299,7 @@ export const StackSelection = ({ answers, stack, onConfirmStack }) => {
           Equip Your Tech Arsenal
         </h1>
         <p className="text-muted text-sm max-w-lg mx-auto">
-          AI recommended a modern stack tailored to your launch variables. Confirm or override individual elements below.
+          {rationale}
         </p>
       </div>
 
@@ -121,7 +313,12 @@ export const StackSelection = ({ answers, stack, onConfirmStack }) => {
              </div>
             <div>
               <h3 className="font-display font-bold text-base text-paper flex items-center gap-1.5">
-                AI Tech Advice <span className="text-[10px] bg-aurora/20 text-aurora px-1.5 py-0.5 rounded font-mono font-normal">SC Scrum Recommended</span>
+                AI Tech Advice 
+                {loading ? (
+                  <span className="w-2.5 h-2.5 rounded-full border border-aurora border-t-transparent animate-spin inline-block" />
+                ) : (
+                  <span className="text-[10px] bg-aurora/20 text-aurora px-1.5 py-0.5 rounded font-mono font-normal">{sdlc} Recommended</span>
+                )}
               </h3>
               <p className="text-muted text-xs mt-0.5">
                 Based on: <strong>{answers.projectType || "Startup"}</strong>, <strong>{answers.timeline || "3-6m"}</strong>, and <strong>{answers.teamCapacity || "Small Team"}</strong>.
@@ -144,13 +341,13 @@ export const StackSelection = ({ answers, stack, onConfirmStack }) => {
       {/* Main Grid Selectors */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         {/* Loop Categories */}
-        {Object.keys(stackArsenal).map((category) => (
+        {Object.keys(arsenal).map((category) => (
           <div key={category} className="glass-panel border border-edge rounded-2xl p-4 flex flex-col space-y-3.5">
             <h4 className="font-display font-bold text-xs uppercase tracking-wider text-aurora border-b border-edge/60 pb-2">
               {category}
             </h4>
             <div className="flex-grow flex flex-col space-y-2 overflow-y-auto max-h-[220px] pr-1">
-              {stackArsenal[category].map((opt) => {
+              {arsenal[category].map((opt) => {
                 const isSelected = selected[category] === opt.value;
                 return (
                   <button
@@ -251,14 +448,51 @@ export const StackSelection = ({ answers, stack, onConfirmStack }) => {
         </div>
       </div>
 
-      {/* Submit Trigger */}
       <button
-        onClick={() => onConfirmStack(selected)}
+        onClick={handleConfirm}
+        disabled={isSubmitting}
         className="w-full py-4 bg-gradient-to-r from-aurora to-pulse border border-aurora hover:brightness-110 active:scale-[0.99] text-midnight font-display font-black text-sm tracking-widest uppercase rounded-xl transition-all shadow-[0_0_25px_rgba(108,99,255,0.35)] cursor-pointer flex items-center justify-center gap-2"
       >
-        <span>CONFIRM STACK & COMPILE GENETICS</span>
-        <Sparkles className="w-4 h-4 fill-midnight" />
+        {isSubmitting ? (
+          <span className="w-5 h-5 rounded-full border-2 border-midnight border-t-transparent animate-spin inline-block" />
+        ) : (
+          <>
+            <span>CONFIRM STACK & COMPILE GENETICS</span>
+            <Sparkles className="w-4 h-4 fill-midnight" />
+          </>
+        )}
       </button>
+
+      {/* Synthesis Scanning Overlay */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-midnight/85 backdrop-blur-md z-[999] flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-md glass-panel border border-aurora/30 rounded-2xl p-8 shadow-[0_0_50px_rgba(108,99,255,0.15)] text-center space-y-6 animate-scale-in">
+            <div className="flex justify-center">
+              <div className="relative w-16 h-16 flex items-center justify-center bg-aurora/10 rounded-full border border-aurora/30">
+                <Cpu className="w-8 h-8 text-aurora animate-spin" style={{ animationDuration: "4s" }} />
+                <Sparkles className="w-5 h-5 text-pulse absolute top-1 right-1 animate-pulse" />
+              </div>
+            </div>
+            
+            <div className="space-y-2">
+              <h3 className="font-display font-bold text-sm text-paper uppercase tracking-wider">
+                Synthesizing Architecture Genetics
+              </h3>
+              <p className="text-xs text-muted font-mono h-8 flex items-center justify-center">
+                {loadingMessage}
+              </p>
+            </div>
+
+            {/* Dynamic Progress Bar */}
+            <div className="w-full bg-edge/40 h-1.5 rounded-full overflow-hidden border border-edge/30">
+              <div 
+                className="bg-gradient-to-r from-aurora to-pulse h-full rounded-full transition-all duration-300" 
+                style={{ width: `${progress}%` }} 
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

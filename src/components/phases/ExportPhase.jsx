@@ -1,21 +1,11 @@
-import React, { useState } from "react";
-import { Download, Award, Kanban, LayoutGrid, CheckCircle, ExternalLink, ArrowLeftRight, ChevronLeft, ChevronRight, FileText, Link, FileDown, Copy } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import { Download, Award, Kanban, CheckCircle, ExternalLink, ChevronLeft, ChevronRight, FileText, FileDown, Copy, Cpu } from "lucide-react";
+import { fetchExportSummary, downloadExportFile, updateRoadmapTaskColumn, saveRoadmap } from "../../utils/api";
 
-export const ExportPhase = ({ project, srs, xp, badges, addToast, gainXp, onEnterDashboard }) => {
-  // Mock Sprint Tasks based on functional requirements
-  const initialTasks = [
-    { id: "task-1", title: "Setup Database Schemas", desc: "Design postgres schemas and database models", hours: 12, prio: "High", col: "s1" },
-    { id: "task-2", title: "Configure Auth Broker", desc: "Setup Supabase Auth JWT integration", hours: 8, prio: "High", col: "s1" },
-    { id: "task-3", title: "Onboarding Intake Form", desc: "Implement LaunchPad frontend modules", hours: 16, prio: "Medium", col: "s2" },
-    { id: "task-4", title: "Decision Q&A Cards", desc: "Build IntelGathering screen transitions", hours: 24, prio: "High", col: "s2" },
-    { id: "task-5", title: "Arsenal Configurator", desc: "Setup tech stack selector interface", hours: 14, prio: "Low", col: "s3" },
-    { id: "task-6", title: "Rich Document Preview", desc: "Design page layout for SRS output", hours: 20, prio: "Medium", col: "s3" },
-    { id: "task-7", title: "Kanban Export Engine", desc: "Connect sprint generation to JSON output", hours: 12, prio: "Low", col: "s4" },
-    { id: "task-8", title: "Unit & Integration Tests", desc: "Configure basis path testing sets", hours: 18, prio: "High", col: "s4" },
-  ];
-
-  const [tasks, setTasks] = useState(initialTasks);
-  const [activeBoardView, setActiveBoardView] = useState("kanban"); // "kanban" or "summary"
+export const ExportPhase = ({ srs, xp, addToast, gainXp, projectId, onEnterDashboard }) => {
+  const [tasks, setTasks] = useState([]);
+  const [metrics, setMetrics] = useState(null);
+  const [loading, setLoading] = useState(true);
 
   const columns = [
     { id: "backlog", name: "Project Backlog" },
@@ -25,79 +15,119 @@ export const ExportPhase = ({ project, srs, xp, badges, addToast, gainXp, onEnte
     { id: "s4", name: "Sprint 4 (Release)" },
   ];
 
-  // Move task to next or previous column
-  const moveTask = (taskId, direction) => {
-    const colOrder = ["backlog", "s1", "s2", "s3", "s4"];
-    setTasks(prev => prev.map(task => {
-      if (task.id === taskId) {
-        const curIdx = colOrder.indexOf(task.col);
-        let nextIdx = direction === "next" ? curIdx + 1 : curIdx - 1;
-        if (nextIdx >= 0 && nextIdx < colOrder.length) {
-          gainXp(15, "Task rescheduled");
-          addToast(`Task moved to ${columns[nextIdx].name}`, "info");
-          return { ...task, col: colOrder[nextIdx] };
+  // Fetch Export metrics and tasks from backend
+  useEffect(() => {
+    let isMounted = true;
+    const loadExportData = async () => {
+      if (!projectId) return;
+      try {
+        setLoading(true);
+        const res = await fetchExportSummary(projectId);
+        if (isMounted) {
+          if (res && res.success) {
+            setTasks(res.tasks || []);
+            setMetrics(res.metrics || null);
+            // Persist the fetched roadmap to the backend for later Kanban use
+            try {
+              await saveRoadmap(projectId, { tasks: res.tasks || [] });
+            } catch (err) {
+              console.error('Failed to persist roadmap:', err);
+              addToast('Could not save roadmap to backend', 'warning');
+            }
+          } else {
+            addToast("Failed to retrieve roadmap checklist. Make sure backend is running.", "error");
+          }
+        }
+      } catch (err) {
+        console.error(err);
+        if (isMounted) {
+          addToast("Backend API error while retrieving roadmap summary.", "error");
+        }
+      } finally {
+        if (isMounted) {
+          setLoading(false);
         }
       }
-      return task;
-    }));
-  };
+    };
 
-  // Genuine Markdown Export Trigger
-  const triggerMDExport = () => {
-    try {
-      let markdownText = `# SOFTWARE REQUIREMENTS SPECIFICATION\n\n`;
-      markdownText += `**Project:** ${project.name || "Unnamed Scenario"}\n`;
-      markdownText += `**Date:** ${new Date().toLocaleDateString()}\n`;
-      markdownText += `**Accumulated XP:** ${xp} points\n`;
-      markdownText += `=======================================================\n\n`;
+    loadExportData();
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId, addToast]);
 
-      Object.keys(srs.sections).forEach((key) => {
-        const sec = srs.sections[key];
-        if (sec.visible) {
-          // Convert basic HTML sections to standard Markdown format
-          let blockContent = sec.content
-            .replace(/<h3>(.*?)<\/h3>/g, "### $1\n")
-            .replace(/<h4>(.*?)<\/h4>/g, "#### $1\n")
-            .replace(/<p>(.*?)<\/p>/g, "$1\n\n")
-            .replace(/<ul>/g, "")
-            .replace(/<\/ul>/g, "")
-            .replace(/<li>(.*?)<\/li>/g, "- $1\n")
-            .replace(/<strong>(.*?)<\/strong>/g, "**$1**")
-            .replace(/<em>(.*?)<\/em>/g, "*$1*")
-            .replace(/<code>(.*?)<\/code>/g, "`$1`")
-            .replace(/<pre><code>([\s\S]*?)<\/code><\/pre>/g, "```javascript\n$1\n```\n\n")
-            // Strip any remaining html tags
-            .replace(/<[^>]*>/g, "");
+  // Persist tasks to localStorage whenever they change
+  useEffect(() => {
+    if (projectId && projectId !== "local-project" && tasks && tasks.length) {
+      localStorage.setItem(`specky_roadmap_tasks_${projectId}`, JSON.stringify(tasks));
+    }
+  }, [tasks, projectId]);
 
-          markdownText += `## ${sec.title}\n\n${blockContent}\n\n`;
+  // Move task to next or previous column and persist on the backend
+  const moveTask = async (taskId, direction) => {
+    const colOrder = ["backlog", "s1", "s2", "s3", "s4"];
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    const curIdx = colOrder.indexOf(task.col);
+    let nextIdx = direction === "next" ? curIdx + 1 : curIdx - 1;
+    if (nextIdx >= 0 && nextIdx < colOrder.length) {
+      const nextCol = colOrder[nextIdx];
+      // Optimistic state update for immediate UI feedback
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, col: nextCol } : t));
+      try {
+        const res = await updateRoadmapTaskColumn(projectId, taskId, nextCol);
+        if (res && res.success) {
+          gainXp(15, "Task rescheduled");
+          addToast(`Task moved to ${columns[nextIdx].name}`, "info");
+        } else {
+          throw new Error("API responded with success: false");
         }
-      });
-
-      const blob = new Blob([markdownText], { type: "text/markdown;charset=utf-8;" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.setAttribute("download", `${project.name ? project.name.toLowerCase().replace(/\s+/g, "_") : "srs"}_spec.md`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      gainXp(100, "Markdown Document Exported");
-      addToast("🎉 Markdown downloaded successfully!", "success");
-    } catch (e) {
-      console.error(e);
-      addToast("Failed to compile Markdown document", "error");
+      } catch (err) {
+        console.error(err);
+        addToast("Failed to persist task reschedule on backend", "error");
+        // Revert on failure
+        setTasks(prev => prev.map(t => t.id === taskId ? { ...t, col: colOrder[curIdx] } : t));
+      }
     }
   };
 
-  // Mock Export triggers with nice feedback
-  const triggerMockExport = (format) => {
+  // Compile and download document from the backend
+  const handleDownloadExport = async (format) => {
     addToast(`📥 Assembling documentation pages for ${format} export...`, "info");
-    setTimeout(() => {
-      gainXp(100, `${format} Document Compiled`);
-      addToast(`🎉 ${format} downloaded successfully!`, "success");
-    }, 1500);
+    try {
+      const res = await downloadExportFile(projectId, format.toLowerCase());
+      if (res && res.success && res.downloadUrl) {
+        const link = document.createElement("a");
+        link.href = res.downloadUrl;
+        link.setAttribute("download", res.fileName || `srs_spec.${format.toLowerCase()}`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        gainXp(100, `${format} Document Compiled`);
+        addToast(`🎉 ${format} downloaded successfully!`, "success");
+      } else {
+        throw new Error("Invalid response format");
+      }
+    } catch (err) {
+      console.error(err);
+      addToast(`Failed to compile or download ${format} document. Make sure backend is running.`, "error");
+    }
   };
+
+  if (loading) {
+    return (
+      <div className="w-full max-w-3xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+        <div className="relative w-16 h-16 flex items-center justify-center bg-edge/30 rounded-2xl border border-aurora/50">
+          <Cpu className="w-8 h-8 text-aurora animate-spin" style={{ animationDuration: "3s" }} />
+          <div className="absolute inset-0 border-2 border-aurora border-t-transparent rounded-2xl animate-spin" />
+        </div>
+        <div className="text-center space-y-2">
+          <h3 className="font-display font-semibold text-base text-paper">Assembling Final Blueprint...</h3>
+          <p className="text-xs text-muted">Compiling roadmaps, metrics, and backlog from the database...</p>
+        </div>
+      </div>
+    );
+  }
 
   const activeSectionsCount = Object.keys(srs.sections).filter(k => srs.sections[k].visible).length;
 
@@ -140,7 +170,9 @@ export const ExportPhase = ({ project, srs, xp, badges, addToast, gainXp, onEnte
           <div className="space-y-3.5">
             <div className="flex justify-between items-center text-xs">
               <span className="text-muted">Total Pages (est.)</span>
-              <span className="font-mono text-paper font-semibold">24 pages</span>
+              <span className="font-mono text-paper font-semibold">
+                {metrics ? `${metrics.totalPagesEstimated} pages` : "—"}
+              </span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-muted">Scope Sections</span>
@@ -148,15 +180,21 @@ export const ExportPhase = ({ project, srs, xp, badges, addToast, gainXp, onEnte
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-muted">Functional Requirements</span>
-              <span className="font-mono text-paper font-semibold">8 defined</span>
+              <span className="font-mono text-paper font-semibold">
+                {metrics ? `${metrics.functionalRequirementsCount} defined` : "—"}
+              </span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-muted">Identified Risks</span>
-              <span className="font-mono text-paper font-semibold">6 mapped</span>
+              <span className="font-mono text-paper font-semibold">
+                {metrics ? `${metrics.identifiedRisksCount} mapped` : "—"}
+              </span>
             </div>
             <div className="flex justify-between items-center text-xs">
               <span className="text-muted">Timeline Sprint Phases</span>
-              <span className="font-mono text-paper font-semibold">4 sprints</span>
+              <span className="font-mono text-paper font-semibold">
+                {metrics ? `${metrics.timelineSprintsCount} sprints` : "—"}
+              </span>
             </div>
           </div>
         </div>
@@ -170,7 +208,7 @@ export const ExportPhase = ({ project, srs, xp, badges, addToast, gainXp, onEnte
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {/* PDF */}
             <button 
-              onClick={() => triggerMockExport("PDF")}
+              onClick={() => handleDownloadExport("PDF")}
               className="p-4 rounded-xl bg-midnight/50 border border-edge hover:border-aurora hover:bg-surface/85 transition-all text-center flex flex-col items-center justify-center gap-2.5 cursor-pointer group"
             >
               <FileDown className="w-6 h-6 text-aurora group-hover:scale-110 transition-transform" />
@@ -180,7 +218,7 @@ export const ExportPhase = ({ project, srs, xp, badges, addToast, gainXp, onEnte
 
             {/* DOCX */}
             <button 
-              onClick={() => triggerMockExport("DOCX")}
+              onClick={() => handleDownloadExport("DOCX")}
               className="p-4 rounded-xl bg-midnight/50 border border-edge hover:border-aurora hover:bg-surface/85 transition-all text-center flex flex-col items-center justify-center gap-2.5 cursor-pointer group"
             >
               <FileText className="w-6 h-6 text-aurora group-hover:scale-110 transition-transform" />
@@ -190,7 +228,7 @@ export const ExportPhase = ({ project, srs, xp, badges, addToast, gainXp, onEnte
 
             {/* MDX (Functional Blob Exporter) */}
             <button 
-              onClick={triggerMDExport}
+              onClick={() => handleDownloadExport("MDX")}
               className="p-4 rounded-xl bg-midnight/50 border border-pulse hover:border-pulse hover:bg-surface/85 transition-all text-center flex flex-col items-center justify-center gap-2.5 cursor-pointer group"
             >
               <FileText className="w-6 h-6 text-pulse group-hover:scale-110 transition-transform" />

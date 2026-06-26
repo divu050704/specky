@@ -155,6 +155,17 @@ export const fetchRoadmap = async (projectId) => {
 };
 
 /**
+ * Save/replace the full sprint roadmap (tasks) for a project.
+ * @param {string} projectId - Target project UUID.
+ * @param {object} data - Payload containing tasks array.
+ * @returns {Promise<object>} Persistence confirmation.
+ */
+export const saveRoadmap = async (projectId, data) => {
+  const response = await apiClient.post(`/projects/${projectId}/roadmap`, data);
+  return response.data;
+};
+
+/**
  * Developer Load: Onboard a developer dynamically.
  * @param {string} projectId - Target project UUID.
  * @param {object} devData - Developer fields (name, role, specialty).
@@ -187,6 +198,43 @@ export const autoAssignSprint = async (projectId, sprintId) => {
  */
 export const fetchProjectState = async (projectId) => {
   const response = await apiClient.get(`/projects/${projectId}/state`);
+  return response.data;
+};
+
+// ---------------------------------------------------------
+// 4. Export & Roadmap Endpoints
+// ---------------------------------------------------------
+
+/**
+ * Fetch AI-generated sprint roadmap tasks and document metrics.
+ * @param {string} projectId - Target project UUID.
+ * @returns {Promise<object>} Metrics summary and tasks.
+ */
+export const fetchExportSummary = async (projectId) => {
+  const response = await apiClient.get(`/projects/${projectId}/export/summary`);
+  return response.data;
+};
+
+/**
+ * Compile and generate download URL/file for the scoping documentation.
+ * @param {string} projectId - Target project UUID.
+ * @param {"pdf"|"docx"|"mdx"} format - Selected file format.
+ * @returns {Promise<object>} Compilation success, fileName, and downloadUrl.
+ */
+export const downloadExportFile = async (projectId, format) => {
+  const response = await apiClient.post(`/projects/${projectId}/export/file`, { format });
+  return response.data;
+};
+
+/**
+ * Reschedule a roadmap task to a different column.
+ * @param {string} projectId - Target project UUID.
+ * @param {string} taskId - Target task identifier.
+ * @param {string} col - Target column (backlog, s1, s2, s3, s4).
+ * @returns {Promise<object>} Persistence confirmations.
+ */
+export const updateRoadmapTaskColumn = async (projectId, taskId, col) => {
+  const response = await apiClient.patch(`/projects/${projectId}/roadmap/tasks/${taskId}`, { col });
   return response.data;
 };
 

@@ -30,41 +30,47 @@ export const SpeckyDashboard = ({ project, srs, xp, projectId, navigateToWizard 
   const [showAllocationLogs, setShowAllocationLogs] = useState(false);
   const [allocationLogs, setAllocationLogs] = useState([]);
 
-  // Synchronize dashboard tasks and developers with backend on mount
-  useEffect(() => {
-    if (!projectId || projectId === "local-project") return;
-
-    const syncWithBackend = async () => {
+  // Primary tasks store (stateful for Kanban drag-drop and Backlog additions)
+  const [tasks, setTasks] = useState(() => {
+    const saved = localStorage.getItem(`specky_roadmap_tasks_${projectId || "local-project"}`);
+    if (saved) {
       try {
-        const sprintData = await api.fetchActiveSprint(projectId);
-        if (sprintData && sprintData.tasks) {
-          setTasks(sprintData.tasks);
-        }
-
-        const loadData = await api.fetchTeamLoad(projectId);
-        if (loadData && loadData.allocations) {
-          const updatedDevs = loadData.allocations.map(alloc => {
-            const existing = developers.find(d => d.id === alloc.developerId);
-            return {
-              id: alloc.developerId,
-              name: alloc.name,
-              role: existing?.role || "Developer",
-              specialty: existing?.specialty || "general",
-              bg: existing?.bg || "bg-bg-raised",
-              text: existing?.text || "text-text-muted"
-            };
-          });
-          if (updatedDevs.length > 0) {
-            setDevelopers(updatedDevs);
-          }
-        }
-      } catch (err) {
-        console.warn("Could not sync Specky Dashboard data with backend server on load", err);
+        const parsed = JSON.parse(saved);
+        return parsed.map(t => {
+          if (t.col === "s1") return { ...t, col: "done" };
+          if (t.col === "s2") return { ...t, col: "todo" };
+          return t;
+        });
+      } catch (e) {
+        console.error("Error parsing saved tasks", e);
       }
-    };
+    }
+    return [
+      { id: "task-1", title: "Setup Database Schemas", desc: "Design postgres schemas and database models", hours: 12, prio: "High", col: "done", user: "AK" },
+      { id: "task-2", title: "Configure Auth Broker", desc: "Setup Supabase Auth JWT integration", hours: 8, prio: "High", col: "done", user: "MK" },
+      { id: "task-3", title: "Onboarding Intake Form", desc: "Implement LaunchPad frontend modules", hours: 16, prio: "Medium", col: "progress", user: "SR" },
+      { id: "task-4", title: "Decision Q&A Cards", desc: "Build IntelGathering screen transitions", hours: 24, prio: "High", col: "progress", user: "JW" },
+      { id: "task-5", title: "Arsenal Configurator", desc: "Setup tech stack selector interface", hours: 14, prio: "Low", col: "todo", user: "DL" },
+      { id: "task-6", title: "Rich Document Preview", desc: "Design page layout for SRS output", hours: 20, prio: "Medium", col: "review", user: "AK" },
+      { id: "task-7", title: "Kanban Export Engine", desc: "Connect sprint generation to JSON output", hours: 12, prio: "Low", col: "todo", user: "SR" },
+      { id: "task-8", title: "Unit & Integration Tests", desc: "Configure basis path testing sets", hours: 18, prio: "High", col: "todo", user: "JW" },
+    ];
+  });
 
-    syncWithBackend();
-  }, [projectId]);
+  const [risks, setRisks] = useState([
+    { id: "R-01", name: "Authentication Latency from provider APIs", col: "L2-I4", level: "High", badge: "bg-[#FEE2E2] text-[#991B1B]", desc: "JWTS token latency exceeds 200ms thresholds under peak scale.", likelihood: 2, impact: 4 },
+    { id: "R-02", name: "Edge Routing Deployment Configurations error", col: "L3-I3", level: "Medium", badge: "bg-[#FEF3C7] text-[#92400E]", desc: "Serverless edge routing paths may conflict on route mapping redirects.", likelihood: 3, impact: 3 },
+    { id: "R-03", name: "Scope Creep Deviation on sprint scheduling", col: "L4-I4", level: "High", badge: "bg-[#FEE2E2] text-[#991B1B]", desc: "Adding custom intake modules manually exceeds 2-week cycle targets.", likelihood: 4, impact: 4 },
+    { id: "R-04", name: "PostgreSQL Database Connection Pooling Bottlenecks", col: "L1-I4", level: "Low", badge: "bg-[#D1FAE5] text-[#065F46]", desc: "Relational database pool limit depletion under growth levels.", likelihood: 1, impact: 4 }
+  ]);
+
+  const [milestones, setMilestones] = useState([
+    { id: "m1", name: "Milestone 1: Authentication & Layout Setup", date: "June 01 - June 15", status: "Completed", barWidth: "w-full bg-[#10B981]", progress: 100 },
+    { id: "m2", name: "Milestone 2: Scoping Q&A Card Interface", date: "June 15 - June 24", status: "Completed", barWidth: "w-full bg-[#10B981]", progress: 100 },
+    { id: "m3", name: "Milestone 3: Live Document Previews (Phase 4)", date: "June 24 - July 08", status: "In Progress", barWidth: "w-[68%] bg-cobalt animate-pulse", progress: 68 },
+    { id: "m4", name: "Milestone 4: Exporter & Kanban Boards (Phase 5)", date: "July 08 - July 22", status: "To Do", barWidth: "w-0 bg-border-soft", progress: 0 },
+    { id: "m5", name: "Milestone 5: Agiled Dashboard Rollout Integration", date: "July 22 - August 05", status: "To Do", barWidth: "w-0 bg-border-soft", progress: 0 }
+  ]);
 
   // New Developer Form states
   const [newDevName, setNewDevName] = useState("");
@@ -90,17 +96,105 @@ export const SpeckyDashboard = ({ project, srs, xp, projectId, navigateToWizard 
     { id: "done", name: "Done", dotColor: "bg-[#94A3B8]" }
   ];
 
-  // Primary tasks store (stateful for Kanban drag-drop and Backlog additions)
-  const [tasks, setTasks] = useState([
-    { id: "task-1", title: "Setup Database Schemas", desc: "Design postgres schemas and database models", hours: 12, prio: "High", col: "done", user: "AK" },
-    { id: "task-2", title: "Configure Auth Broker", desc: "Setup Supabase Auth JWT integration", hours: 8, prio: "High", col: "done", user: "MK" },
-    { id: "task-3", title: "Onboarding Intake Form", desc: "Implement LaunchPad frontend modules", hours: 16, prio: "Medium", col: "progress", user: "SR" },
-    { id: "task-4", title: "Decision Q&A Cards", desc: "Build IntelGathering screen transitions", hours: 24, prio: "High", col: "progress", user: "JW" },
-    { id: "task-5", title: "Arsenal Configurator", desc: "Setup tech stack selector interface", hours: 14, prio: "Low", col: "todo", user: "DL" },
-    { id: "task-6", title: "Rich Document Preview", desc: "Design page layout for SRS output", hours: 20, prio: "Medium", col: "review", user: "AK" },
-    { id: "task-7", title: "Kanban Export Engine", desc: "Connect sprint generation to JSON output", hours: 12, prio: "Low", col: "todo", user: "SR" },
-    { id: "task-8", title: "Unit & Integration Tests", desc: "Configure basis path testing sets", hours: 18, prio: "High", col: "todo", user: "JW" },
-  ]);
+  // Synchronize dashboard tasks and developers with backend on mount
+  useEffect(() => {
+    if (!projectId || projectId === "local-project") return;
+
+    // Load from localStorage first to avoid flash of empty/default state
+    const saved = localStorage.getItem(`specky_roadmap_tasks_${projectId}`);
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        setTasks(parsed.map(t => {
+          if (t.col === "s1") return { ...t, col: "done" };
+          if (t.col === "s2") return { ...t, col: "todo" };
+          return t;
+        }));
+      } catch (e) {
+        console.error("Error parsing saved tasks", e);
+      }
+    }
+
+    const syncWithBackend = async () => {
+      try {
+        const loadData = await api.fetchTeamLoad(projectId);
+        if (loadData && loadData.allocations) {
+          const updatedDevs = loadData.allocations.map(alloc => {
+            const existing = developers.find(d => d.id === alloc.developerId);
+            return {
+              id: alloc.developerId,
+              name: alloc.name,
+              role: existing?.role || "Developer",
+              specialty: existing?.specialty || "general",
+              bg: existing?.bg || "bg-bg-raised",
+              text: existing?.text || "text-text-muted"
+            };
+          });
+          if (updatedDevs.length > 0) {
+            setDevelopers(updatedDevs);
+          }
+        }
+
+        try {
+          const riskData = await api.fetchRisks(projectId);
+          if (riskData && riskData.risks) {
+            setRisks(riskData.risks.map(r => ({
+              id: r.id,
+              name: r.title || r.name,
+              desc: r.desc || r.description || "Active risk record details",
+              likelihood: r.likelihood || 1,
+              impact: r.impact || 1,
+              col: `L${r.likelihood}-I${r.impact}`,
+              level: r.likelihood * r.impact >= 12 ? "High" : r.likelihood * r.impact >= 6 ? "Medium" : "Low",
+              badge: r.likelihood * r.impact >= 12 ? "bg-[#FEE2E2] text-[#991B1B]" : r.likelihood * r.impact >= 6 ? "bg-[#FEF3C7] text-[#92400E]" : "bg-[#D1FAE5] text-[#065F46]"
+            })));
+          }
+        } catch (rErr) {
+          console.warn("Could not fetch risks from backend", rErr);
+        }
+
+        try {
+          const roadmapData = await api.fetchRoadmap(projectId);
+          if (roadmapData) {
+            if (roadmapData.tasks && roadmapData.tasks.length) {
+              const mapped = roadmapData.tasks.map(t => {
+                if (t.col === "s1") return { ...t, col: "done" };
+                if (t.col === "s2") return { ...t, col: "todo" };
+                return t;
+              });
+              setTasks(mapped);
+              localStorage.setItem(`specky_roadmap_tasks_${projectId}`, JSON.stringify(mapped));
+            }
+            if (roadmapData.milestones) {
+              setMilestones(roadmapData.milestones.map(m => ({
+                id: m.id,
+                name: m.title || m.name,
+                date: m.date || m.dueDate || "TBD",
+                status: m.progress === 100 ? "Completed" : m.progress > 0 ? "In Progress" : "To Do",
+                barWidth: m.progress === 100 ? "w-full bg-[#10B981]" : m.progress > 0 ? `w-[${m.progress}%] bg-cobalt animate-pulse` : "w-0 bg-border-soft",
+                progress: m.progress || 0
+              })));
+            }
+          }
+        } catch (mErr) {
+          console.warn("Could not fetch milestones and tasks from roadmap backend", mErr);
+        }
+      } catch (err) {
+        console.warn("Could not sync Specky Dashboard data with backend server on load", err);
+      }
+    };
+
+    syncWithBackend();
+  }, [projectId]);
+
+  // Save tasks to localStorage whenever they change
+  useEffect(() => {
+    if (projectId && projectId !== "local-project" && tasks && tasks.length) {
+      localStorage.setItem(`specky_roadmap_tasks_${projectId}`, JSON.stringify(tasks));
+    }
+  }, [tasks, projectId]);
+
+
 
   // Calculate Developer Capacity Stats dynamically from active tasks state
   const getDevStats = (devId) => {
@@ -1123,12 +1217,8 @@ export const SpeckyDashboard = ({ project, srs, xp, projectId, navigateToWizard 
                         cellBg = "bg-amber-100/70 border-amber-200";
                       }
 
-                      // Check if any of our mock risks fall on this coordinate
-                      const matchRisk = (
-                        (rowVal === 2 && colVal === 4 && "L2-I4") || // Auth Latency
-                        (rowVal === 3 && colVal === 3 && "L3-I3") || // Edge Routing
-                        (rowVal === 4 && colVal === 4 && "L4-I4")    // Scope Creep
-                      );
+                      // Check if any of our risks fall on this coordinate
+                      const matchRisk = risks.find(r => r.likelihood === rowVal && r.impact === colVal);
 
                       return (
                         <div 
@@ -1137,7 +1227,10 @@ export const SpeckyDashboard = ({ project, srs, xp, projectId, navigateToWizard 
                           className={`w-7.5 h-7.5 rounded-[4px] border flex items-center justify-center text-[8px] font-mono font-bold transition-all relative ${cellBg}`}
                         >
                           {matchRisk && (
-                            <span className="absolute w-2.5 h-2.5 rounded-full bg-cobalt text-white flex items-center justify-center text-[6px] shadow-sm animate-pulse" />
+                            <span 
+                              title={matchRisk.name}
+                              className="absolute w-2.5 h-2.5 rounded-full bg-cobalt text-white flex items-center justify-center text-[6px] shadow-sm animate-pulse" 
+                            />
                           )}
                         </div>
                       );
@@ -1157,17 +1250,12 @@ export const SpeckyDashboard = ({ project, srs, xp, projectId, navigateToWizard 
                 <div className="flex items-center justify-between border-b border-border-soft pb-2.5">
                   <h3 className="text-text-primary font-bold text-xs font-display">Active Risk Records</h3>
                   <span className="text-[10px] font-mono bg-bg-raised text-text-secondary px-2 py-0.5 rounded">
-                    4 Tracked
+                    {risks.length} Tracked
                   </span>
                 </div>
 
                 <div className="space-y-3 divide-y divide-border-soft">
-                  {[
-                    { id: "R-01", name: "Authentication Latency from provider APIs", col: "L2-I4", level: "High", badge: "bg-[#FEE2E2] text-[#991B1B]", desc: "JWTS token latency exceeds 200ms thresholds under peak scale." },
-                    { id: "R-02", name: "Edge Routing Deployment Configurations error", col: "L3-I3", level: "Medium", badge: "bg-[#FEF3C7] text-[#92400E]", desc: "Serverless edge routing paths may conflict on route mapping redirects." },
-                    { id: "R-03", name: "Scope Creep Deviation on sprint scheduling", col: "L4-I4", level: "High", badge: "bg-[#FEE2E2] text-[#991B1B]", desc: "Adding custom intake modules manually exceeds 2-week cycle targets." },
-                    { id: "R-04", name: "PostgreSQL Database Connection Pooling Bottlenecks", col: "L1-I4", level: "Low", badge: "bg-[#D1FAE5] text-[#065F46]", desc: "Relational database pool limit depletion under growth levels." }
-                  ].map((risk) => (
+                  {risks.map((risk) => (
                     <div key={risk.id} className="pt-3 first:pt-0 space-y-1.5 text-xs text-left">
                       <div className="flex justify-between items-start gap-1">
                         <span className="font-bold text-text-primary font-display">{risk.name}</span>
@@ -1266,13 +1354,7 @@ export const SpeckyDashboard = ({ project, srs, xp, projectId, navigateToWizard 
 
               {/* Milestones timeline track list */}
               <div className="relative border-l border-border-soft pl-6 ml-4 space-y-6">
-                {[
-                  { name: "Milestone 1: Authentication & Layout Setup", date: "June 01 - June 15", status: "Completed", barWidth: "w-full bg-[#10B981]" },
-                  { name: "Milestone 2: Scoping Q&A Card Interface", date: "June 15 - June 24", status: "Completed", barWidth: "w-full bg-[#10B981]" },
-                  { name: "Milestone 3: Live Document Previews (Phase 4)", date: "June 24 - July 08", status: "In Progress", barWidth: "w-[68%] bg-cobalt animate-pulse" },
-                  { name: "Milestone 4: Exporter & Kanban Boards (Phase 5)", date: "July 08 - July 22", status: "To Do", barWidth: "w-0 bg-border-soft" },
-                  { name: "Milestone 5: Agiled Dashboard Rollout Integration", date: "July 22 - August 05", status: "To Do", barWidth: "w-0 bg-border-soft" }
-                ].map((m, idx) => {
+                {milestones.map((m, idx) => {
                   const isDone = m.status === "Completed";
                   const isProgress = m.status === "In Progress";
                   

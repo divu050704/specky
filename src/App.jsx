@@ -39,7 +39,9 @@ function App() {
     navigateToPhase,
     resetAll,
     handleFastForwardQuestions,
-    handleFastForwardSRS
+    handleFastForwardSRS,
+    questions,
+    questionsLoading
   } = useAppState();
 
   const [showResumeModal, setShowResumeModal] = useState(false);
@@ -127,6 +129,8 @@ function App() {
               navigateToPhase={navigateToPhase}
               badges={badges}
               onFastForward={handleFastForwardQuestions}
+              questions={questions}
+              questionsLoading={questionsLoading}
             />
           )}
           
@@ -135,6 +139,7 @@ function App() {
               answers={answers}
               stack={stack}
               onConfirmStack={handleConfirmStack}
+              projectId={projectId}
             />
           )}
           
@@ -163,6 +168,7 @@ function App() {
               badges={badges}
               addToast={addToast}
               gainXp={gainXp}
+              projectId={projectId}
               onEnterDashboard={() => setView("dashboard")}
             />
           )}

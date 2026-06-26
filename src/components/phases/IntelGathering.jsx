@@ -1,19 +1,35 @@
 import React, { useState } from "react";
 import { ArrowLeft, ArrowRight, Shield, Award, Zap, HelpCircle, Cpu } from "lucide-react";
-import { defaultQuestions } from "../../utils/srsTemplates";
 
-export const IntelGathering = ({ answers, onAnswerQuestion, navigateToPhase, badges, onFastForward }) => {
+
+export const IntelGathering = ({ answers, onAnswerQuestion, navigateToPhase, badges, onFastForward, questions, questionsLoading }) => {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [textInput, setTextInput] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const questions = defaultQuestions;
-  const currentQuestion = questions[currentIdx];
+  const currentQuestion = questions ? questions[currentIdx] : null;
   
   const answeredCount = Object.keys(answers).length;
-  const progressPercent = (answeredCount / questions.length) * 100;
+  const totalQuestions = questions ? questions.length : 0;
+  const progressPercent = totalQuestions > 0 ? (answeredCount / totalQuestions) * 100 : 0;
   
   // Calculate AI confidence meter (from 15% starting base to 100%)
-  const confidencePercent = Math.min(100, 15 + Math.round((answeredCount / questions.length) * 85));
+  const confidencePercent = totalQuestions > 0 ? Math.min(100, 15 + Math.round((answeredCount / totalQuestions) * 85)) : 15;
+
+  if (questionsLoading || !questions || questions.length === 0 || !currentQuestion) {
+    return (
+      <div className="w-full max-w-3xl mx-auto py-12 px-4 flex flex-col items-center justify-center min-h-[60vh] space-y-6">
+        <div className="relative w-16 h-16 flex items-center justify-center bg-edge/30 rounded-2xl border border-aurora/50">
+          <Cpu className="w-8 h-8 text-aurora animate-spin" style={{ animationDuration: "3s" }} />
+          <div className="absolute inset-0 border-2 border-aurora border-t-transparent rounded-2xl animate-spin" />
+        </div>
+        <div className="text-center space-y-2">
+          <h3 className="font-display font-semibold text-base text-paper">Scouting Project Parameters...</h3>
+          <p className="text-xs text-muted">Retrieving diagnostic checklist from technical lead core...</p>
+        </div>
+      </div>
+    );
+  }
 
   const handleOptionSelect = (option) => {
     onAnswerQuestion(currentQuestion.id, option.value, option.xp || 75);
@@ -27,11 +43,18 @@ export const IntelGathering = ({ answers, onAnswerQuestion, navigateToPhase, bad
     }
   };
 
-  const handleTextSubmit = (e) => {
+  const handleTextSubmit = async (e) => {
     e.preventDefault();
-    if (!textInput.trim()) return;
+    if (!textInput.trim() || isSubmitting) return;
 
-    onAnswerQuestion(currentQuestion.id, textInput, currentQuestion.xp || 75);
+    setIsSubmitting(true);
+    try {
+      await onAnswerQuestion(currentQuestion.id, textInput, currentQuestion.xp || 75);
+    } catch (err) {
+      console.warn("Could not save answer", err);
+    } finally {
+      setIsSubmitting(false);
+    }
     
     if (currentIdx < questions.length - 1) {
       setCurrentIdx((prev) => prev + 1);
@@ -184,15 +207,21 @@ export const IntelGathering = ({ answers, onAnswerQuestion, navigateToPhase, bad
               />
               <button
                 type="submit"
-                disabled={!textInput.trim()}
+                disabled={!textInput.trim() || isSubmitting}
                 className={`w-full py-3 rounded-xl font-display font-bold text-xs tracking-wider uppercase transition-all duration-300 flex items-center justify-center space-x-2 border cursor-pointer ${
-                  textInput.trim()
+                  textInput.trim() && !isSubmitting
                     ? "bg-pulse border-pulse text-midnight font-bold shadow-[0_0_12px_rgba(0,229,160,0.3)]"
                     : "bg-edge/40 border-edge text-muted opacity-50 cursor-not-allowed"
                 }`}
               >
-                <span>Confirm Answer</span>
-                <ArrowRight className="w-4 h-4" />
+                {isSubmitting ? (
+                  <span className="w-4 h-4 rounded-full border border-midnight border-t-transparent animate-spin inline-block" />
+                ) : (
+                  <>
+                    <span>Confirm Answer</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
               </button>
             </form>
           )}
