@@ -1,0 +1,274 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+:root {
+  /* Backgrounds */
+  --bg-app:       #F4F6FA;   /* page background — cool off-white */
+  --bg-surface:   #FFFFFF;   /* cards, panels, sidebar */
+  --bg-raised:    #F0F3F9;   /* hover states, input fills, secondary surfaces */
+  --bg-active:    #EBF0FF;   /* active nav item, selected states */
+
+  /* Borders */
+  --border-soft:  #E2E8F0;   /* default — all cards, dividers, sidebar */
+  --border-med:   #C8D3E8;   /* emphasized borders, focused inputs */
+
+  /* Cobalt accent */
+  --cobalt:       #4D7EFF;
+  --cobalt-light: #7AA2FF;
+  --cobalt-bg:    #EBF0FF;
+  --cobalt-text:  #1A4FCC;
+
+  /* Text */
+  --text-primary:   #0D1117;   /* headings, task titles */
+  --text-secondary: #4A5568;   /* labels, metadata */
+  --text-muted:     #8896A8;   /* hints, placeholders, timestamps */
+}
+
+@theme {
+  --color-bg-app: var(--bg-app);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-raised: var(--bg-raised);
+  --color-bg-active: var(--bg-active);
+
+  --color-border-soft: var(--border-soft);
+  --color-border-med: var(--border-med);
+
+  --color-cobalt: var(--cobalt);
+  --color-cobalt-light: var(--cobalt-light);
+  --color-cobalt-bg: var(--cobalt-bg);
+  --color-cobalt-text: var(--cobalt-text);
+
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+
+  --animate-pulse-glow: pulse-glow 2s infinite ease-in-out;
+  --animate-dna-pulse: dna-pulse 1.5s infinite alternate;
+  --animate-fade-in: fade-in 0.25s ease-out forwards;
+  --animate-slide-up: slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    box-shadow: 0 0 12px rgba(77, 126, 255, 0.2);
+    border-color: rgba(77, 126, 255, 0.3);
+  }
+  50% {
+    box-shadow: 0 0 20px rgba(77, 126, 255, 0.4);
+    border-color: rgba(77, 126, 255, 0.6);
+  }
+}
+
+@keyframes dna-pulse {
+  0% { transform: scale(0.96); opacity: 0.85; filter: drop-shadow(0 0 2px var(--cobalt)); }
+  100% { transform: scale(1.04); opacity: 1; filter: drop-shadow(0 0 8px var(--cobalt-light)); }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(15px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Custom resets & scrollbars */
+html, body {
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: "Inter", sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+/* Custom Webkit scrollbar styling */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #C8D3E8;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #8896A8;
+}
+
+/* Glassmorphism panel styling helper for light mode */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-soft);
+  box-shadow: 0 4px 18px rgba(77, 126, 255, 0.03);
+}
+
+.particle-grid {
+  background-image: 
+    radial-gradient(circle at 20% 30%, rgba(77, 126, 255, 0.04) 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, rgba(122, 162, 255, 0.03) 0%, transparent 45%),
+    linear-gradient(rgba(226, 232, 240, 0.5) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(226, 232, 240, 0.5) 1px, transparent 1px);
+  background-size: 100% 100%, 100% 100%, 40px 40px, 40px 40px;
+}
+
+/* Floating animation for XP points */
+.xp-float-anim {
+  animation: xpFloatUp 1.2s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
+}
+
+@keyframes xpFloatUp {
+  0% {
+    transform: translateY(10px) scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+    transform: translateY(0) scale(1.1);
+  }
+  100% {
+    transform: translateY(-40px) scale(0.9);
+    opacity: 0;
+  }
+}
+
+/* Form inputs & buttons focus rings */
+input, textarea, select {
+  outline: none;
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  color: var(--text-primary);
+  transition: all 0.15s ease-in-out;
+}
+
+input:focus, textarea:focus, select:focus {
+  border-color: var(--cobalt);
+  box-shadow: 0 0 0 2px rgba(77, 126, 255, 0.2);
+}
+
+/* Focus-visible ring */
+*:focus-visible {
+  outline: 2px solid var(--cobalt);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Interactive hover and scaling helpers */
+.btn-primary:active {
+  transform: scale(0.98);
+  background-color: #3B6AE8; /* 5% darker cobalt */
+}
+
+.task-card {
+  transition: border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.task-card:hover {
+  border-color: var(--cobalt);
+  background-color: #FAFBFF; /* very slight cobalt tint */
+}
+
+.nav-item {
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.nav-item:hover {
+  background-color: var(--bg-raised);
+  color: var(--text-primary);
+}
+
+/* Document styling rules */
+.doc-page {
+  font-family: "Inter", sans-serif;
+  color: #1e293b;
+  line-height: 1.6;
+}
+
+.doc-page h1, .doc-page h2, .doc-page h3 {
+  font-family: "Space Grotesk", sans-serif;
+  color: #0d1117;
+}
+
+.doc-page table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1.5rem 0;
+}
+
+.doc-page th {
+  background-color: var(--cobalt);
+  color: white;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.75rem;
+}
+
+.doc-page td {
+  border-bottom: 1px solid var(--border-soft);
+  padding: 0.75rem;
+  font-size: 0.9rem;
+}
+
+.doc-page tr:hover {
+  background-color: var(--bg-raised);
+}
+
+.doc-page code {
+  font-family: "JetBrains Mono", monospace;
+  background-color: var(--bg-raised);
+  color: var(--text-primary);
+  padding: 0.2rem 0.4rem;
+  border-radius: 0.25rem;
+  font-size: 0.85rem;
+}
+
+.doc-page pre {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-soft);
+  padding: 1rem;
+  border-radius: 0.375rem;
+  overflow-x: auto;
+  margin: 1rem 0;
+}
+
+.doc-page pre code {
+  background-color: transparent;
+  padding: 0;
+  font-size: 0.85rem;
+}
+
+/* Page break indicators */
+.page-break {
+  border-top: 2px dashed var(--border-soft);
+  position: relative;
+  margin: 3rem 0;
+}
+
+.page-break::after {
+  content: "PAGE BREAK";
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-app);
+  padding: 0 10px;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-family: "JetBrains Mono", monospace;
+  letter-spacing: 2px;
+}
