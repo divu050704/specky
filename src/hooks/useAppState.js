@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { generateSRSContent } from "../utils/srsTemplates";
 import * as api from "../utils/api";
 
@@ -100,20 +100,20 @@ export const useAppState = () => {
     setHasSavedState(false);
   };
 
-  const clearSavedState = () => {
+  const clearSavedState = useCallback(() => {
     localStorage.removeItem(LOCAL_STORAGE_KEY);
     setHasSavedState(false);
-  };
+  }, []);
 
-  const addToast = (message, type = "info") => {
+  const addToast = useCallback((message, type = "info") => {
     const id = Date.now() + Math.random().toString(36).substr(2, 9);
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
       setToasts((prev) => prev.filter((t) => t.id !== id));
     }, 4000);
-  };
+  }, []);
 
-  const gainXp = (amount, label) => {
+  const gainXp = useCallback((amount, label) => {
     setXp((prev) => prev + amount);
     
     // Add floating XP indicator
@@ -126,7 +126,7 @@ export const useAppState = () => {
     if (label) {
       addToast(`+${amount} XP: ${label}`, "success");
     }
-  };
+  }, [addToast]);
 
   const unlockBadge = (badgeName) => {
     if (!badges.includes(badgeName)) {
